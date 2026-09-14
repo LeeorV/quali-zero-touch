@@ -7,7 +7,8 @@ description: >
   "multi-grain blueprint", "nested blueprint", "Torque environment blueprint", "grain spec",
   "blueprint inputs/outputs", "blueprint for Quali Torque", "Torque blueprint for deploying X".
   Also trigger when the user asks to debug or fix a blueprint, add a grain, wire inputs/outputs 
-  between grains, or configure agents/dependencies/labels in a Torque context.
+  between grains, or configure agents/dependencies/labels in a Torque context, or pastes a
+  Torque validation error such as "Blueprint YAML file contains syntax error(s) in line X col Y".
   Always use this skill — do NOT try to write Torque blueprints from memory alone.
 ---
 
@@ -17,6 +18,110 @@ description: >
 
 Torque blueprints are spec_version: 2 YAML files that define cloud environments composed of **grains** 
 (Terraform, Helm, Shell, Kubernetes, etc.). You will write high-quality, production-ready blueprints.
+
+---
+
+## Mode Check — Authoring or Debugging?
+
+If the user arrived with **an error message from Torque** — a failed validation, a rejected
+upload, a red deployment — you are in **debug mode**. Follow *Debug Mode* below before writing
+or judging anything. Steps 1–7 are an authoring pipeline; they are not a triage procedure, and
+improvising triage from them is how confident wrong answers get produced.
+
+Otherwise, continue to Step 1.
+
+---
+
+## Debug Mode — Torque Rejected a Blueprint
+
+### D1 — Run the authoritative validator FIRST
+
+Do not reason about the error from the YAML alone. Torque's server-side validator is the only
+source that knows what Torque actually accepts:
+
+```bash
+python "${CLAUDE_PLUGIN_ROOT}/skills/zero-touch-api/scripts/examples/validate_blueprint.py" \
+  --space <SPACE> --name <BP> --file <PATH_TO_YAML>
+```
+
+Ask for the space name if you don't have it — it is usually worth one question to get a real
+answer instead of a guess. If you genuinely cannot run it (no space, no token, YAML pasted with
+no context), **say so in your first sentence**, before any findings, and treat everything that
+follows as unverified.
+
+Secondary check — validate against the published schema:
+```
+web_fetch: https://raw.githubusercontent.com/QualiTorque/torque-vs-code-extensions/master/client/schemas/blueprint-spec2-schema.json
+```
+
+### D2 — Never treat `line N col M` as the root cause
+
+Torque reports a **position, not a diagnosis**. A violation elsewhere in the file routinely
+surfaces at an unrelated line, and `additionalProperties: false` failures often anchor to a
+parent node rather than the offending key.
+
+**Do not construct an explanation that fits the reported line.** That is backwards reasoning:
+the conclusion gets fixed first and a plausible mechanism gets invented to justify it. Enumerate
+every violation in the file (D3) *first*, then check which ones the reported position is
+consistent with — never the reverse.
+
+### D3 — Enumerate ALL violations before explaining any one
+
+Sweep the entire file against the schema and *Known Schema Gotchas* below, and list every
+violation you find. Only then write the explanation. One reported error routinely masks several
+real ones, and the reported one is often not the one that matters.
+
+### D4 — Label every finding with its evidence class
+
+Findings are not equally trustworthy. Presenting them in one uniform confident voice is exactly
+how a user ends up acting on a guess. Tag each finding:
+
+| Tag | Means |
+|---|---|
+| **[Confirmed]** | The validator rejected it. Quote the error verbatim. |
+| **[Schema]** | Provable from the schema text. Cite the definition and the constraint. |
+| **[Inferred]** | Your reasoning only. Nothing confirmed it. |
+
+Rules:
+- Order findings **[Confirmed] → [Schema] → [Inferred]**. Inferred goes last, always.
+- State the uncertainty **before** the fix, never after. Users act on the fix and skip a trailing caveat.
+- Never describe an **[Inferred]** finding in schema language ("the schema requires…",
+  "it has to be…") unless you have actually read that constraint in the schema.
+- If the user replies *"we use this widely and have never had an issue"* — **believe them.**
+  Production evidence outranks your inference. Retract the finding; do not defend it.
+
+### D5 — Check the working-patterns list before calling anything broken
+
+See *Valid Patterns That Look Wrong* below. If the construct appears there, it is not the bug —
+keep looking.
+
+---
+
+## Known Schema Gotchas
+
+Verified against `blueprint-spec2-schema.json`. These are the highest-frequency causes of
+"syntax error" rejections:
+
+| Construct | Rule | Wrong | Right |
+|---|---|---|---|
+| Blueprint `outputs:` | `BlueprintOutputObject` is `additionalProperties: false`, `required: [value]`. Only `value`, `kind` (`regular`/`link`) and `quick` are allowed — **`description:` is not a valid key.** | `my_out:` / `  description: "..."` | `my_out:` / `  value: '{{ .grains.g.outputs.X }}'` / `  quick: false` |
+| Grain `env-vars:` | `EnvironmentVariable` is a plain key/value map (`patternProperties: ^[A-Za-z0-9_]+`). A `name`/`value` pair **passes schema validation** but silently sets two env vars literally named `name` and `value` — the script never sees the real variable. | `- name: API_KEY` / `  value: 'x'` | `- API_KEY: 'x'` |
+| Shell grain outputs | A blueprint output referencing `{{ .grains.g.outputs.X }}` requires grain `g` to list `X` in its own `spec.outputs:` **and** the command to `export X`. Otherwise the value is discarded when the shell exits. | blueprint output alone | grain `outputs: [X]` + `export X` |
+| Grain names | Must match `[a-zA-Z0-9-_ ]{3,45}`. | — | — |
+
+## Valid Patterns That Look Wrong
+
+Legal constructs in wide production use. **Do not flag these as bugs.**
+
+- **`agent.name` from a space parameter.** `GrainSpecHostObject.name` is an unconstrained
+  `string` — the schema places no restriction on which template namespace may appear there.
+  `name: '{{ .params.default_agent }}'` is valid and is a *good* pattern: it lets a space set
+  the agent once instead of making every user pick one at launch. The `{{ .inputs.agent }}`
+  form used throughout this skill is a **convention, not a requirement**.
+- **`.params` inside grain specs.** No documented ordering rule makes space parameters
+  unavailable to `agent`, `env-vars` or grain `inputs`, and the pattern is confirmed working in
+  production. Do not invent a resolution-order argument to explain an unrelated error.
+- **Commented-out `inputs:` blocks.** Inert. Never a validation error.
 
 ---
 
@@ -169,7 +274,8 @@ labels:
 # Grain output reference (requires depends-on)
 '{{ .grains.grain_name.outputs.output_name }}'
 
-# Parameter store
+# Space / account parameter store.
+# Valid throughout a grain spec — including agent.name, env-vars, and grain inputs.
 '{{ .params.param_name }}'
 
 # Dynamic attributes
@@ -331,7 +437,9 @@ nested_env:
 ### Always do
 - ✅ Include `spec_version: 2` as the first line
 - ✅ Write a meaningful `description` — it appears in the catalog
-- ✅ Use `type: agent` for agent inputs (don't hardcode agent names in production blueprints)
+- ✅ Supply the agent via an input of `type: agent` **or** a space parameter
+  (`'{{ .params.default_agent }}'`) rather than a hardcoded name — **both are valid**; this is a
+  convention, not a schema rule
 - ✅ Use `depends-on` when grain B needs outputs from grain A
 - ✅ Declare all outputs your grains produce that are useful to users
 - ✅ Mark URLs and endpoints with `kind: link` in outputs
@@ -351,6 +459,9 @@ nested_env:
 - ❌ Don't expose the auto-generated `agent.name` input in published blueprints (remove it)
 - ❌ Don't use `branch:` tracking for production — prefer `tag:` or `commit:` for stability
 - ❌ Don't omit `destroy` in shell grains if resources are created (cleanup is required)
+- ❌ Don't call a construct invalid just because this skill's examples don't show it — the
+  examples are one idiom, not the full set of what Torque accepts. Check *Valid Patterns That
+  Look Wrong* and the schema before flagging anything
 
 ### Multi-grain architecture patterns
 ```yaml
@@ -404,9 +515,12 @@ Before presenting the final blueprint, check:
 - [ ] All `{{ .grains.X.outputs.Y }}` references have corresponding `depends-on: X`
 - [ ] All outputs declared in grain `outputs:` list are actually produced by the IaC module
 - [ ] Grain `kind:` values are valid: terraform, helm, shell, kubernetes, ansible, cloudformation, blueprint, opentofu, terragrunt, argocd, aws-cdk, cloudshell
-- [ ] Agent input uses `type: agent`
+- [ ] Agent comes from a `type: agent` input or a space parameter — not a hardcoded name
 - [ ] No hardcoded credentials
 - [ ] Resource names use `{{ envId }}` for uniqueness where needed
+- [ ] Blueprint `outputs:` use only `value` / `kind` / `quick` — **no `description:`**
+- [ ] `env-vars:` entries are `- KEY: value` maps, not `- name:` / `value:` pairs
+- [ ] Every `{{ .grains.X.outputs.Y }}` has `Y` in grain X's `spec.outputs:` list
 
 ---
 
