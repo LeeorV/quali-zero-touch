@@ -49,7 +49,10 @@ jobs:
         id: skills_zip
         run: |
           SKILLS_ZIP="dist/skills-${{ steps.version.outputs.version }}.zip"
-          zip -r "$SKILLS_ZIP" skills/
+          # Mirror pack.sh's exclusions so both release artifacts have the
+          # same hygiene — no editor cruft or bytecode caches in the zip.
+          zip -rqX "$SKILLS_ZIP" skills/ \
+            -x '*/__pycache__/*' '*.pyc' '*/.DS_Store' '*.swp' '*/.idea/*'
           echo "path=$SKILLS_ZIP" >> "$GITHUB_OUTPUT"
 
       - name: Create unversioned copies

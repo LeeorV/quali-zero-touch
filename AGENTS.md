@@ -22,6 +22,8 @@ A [Claude Code plugin](https://docs.claude.com/claude-code) for [Quali Torque](h
 ├── skills/                      # one folder per skill (see below)
 │   ├── zero-touch-api/          # shared Torque REST helper + example scripts + references
 │   └── <skill>/SKILL.md
+├── scripts/validate_plugin.py   # enforces the invariants below (CI + pre-commit)
+├── .github/workflows/           # validate.yml (every push/PR), release.yml (manual)
 ├── pack.sh                      # build distributable zip
 ├── suggested-settings.json      # canonical user-settings allowlist
 ├── AGENTS.md / CLAUDE.md        # dev-facing docs (excluded from zip)
@@ -58,14 +60,16 @@ A [Claude Code plugin](https://docs.claude.com/claude-code) for [Quali Torque](h
    - Knowledge / auto-triggered skill → add a row to the **Skills** table.
    - Slash-invocable skill (has `argument-hint:` frontmatter) → add a row to the **Commands (user-invocable skills)** table, using `/skill-name [arg]`.
    - A skill can warrant both (e.g. a knowledge skill that's also `/`-callable).
-6. Sanity check before committing: every dir under `skills/` should appear in README. Quick audit —
+6. Sanity check before committing:
    ```bash
-   for d in skills/*/; do s=$(basename "$d"); grep -q "$s" README.md || echo "MISSING from README: $s"; done
+   python3 scripts/validate_plugin.py
    ```
+   This checks README coverage along with every other invariant below. CI runs the
+   same command on each push and PR.
 
 ### SKILL.md frontmatter gotchas
 
-Claude Cowork's plugin validator is strict. The local `claude plugin validate` does **not** catch these — they fail silently on Cowork upload with a generic "validation error":
+Claude Cowork's plugin validator is strict. The local `claude plugin validate` does **not** catch these — they fail silently on Cowork upload with a generic "validation error". `scripts/validate_plugin.py` catches all of them locally and in CI; run it before you push.
 
 - **`description` is hard-capped at 1024 characters** (after YAML folding `>` / quoting). Going over by even 1 char rejects the whole plugin. When editing rename refs inside a description, recount with:
   ```bash
@@ -93,12 +97,21 @@ When a Cowork upload fails opaquely, suspect description length first — `bluep
 
 ## Testing
 
-Manual: build with `./pack.sh`, install via Claude Code CLI or upload to Claude Cowork, then trigger each skill via natural-language prompts and run every slash command. No automated test suite yet.
+Automated: `python3 scripts/validate_plugin.py` (requires PyYAML) checks skill frontmatter,
+description length, README coverage, `${CLAUDE_PLUGIN_ROOT}` paths, manifest consistency,
+raw-HTTP usage, and committed credentials. `.github/workflows/validate.yml` runs it plus a
+`pack.sh` build on every push and PR. Exit 1 on errors; warnings do not fail the build.
+
+Manual: build with `./pack.sh`, install via Claude Code CLI or upload to Claude Cowork,
+then trigger each skill via natural-language prompts and run every slash command. There is
+no behavioural test suite for skill content.
 
 ## License
 
-License pending — see `README.md`. Don't add code from incompatibly-licensed sources until the license decision is made.
+Apache-2.0 — see `LICENSE`. Declared in both `.claude-plugin/plugin.json` and
+`.claude-plugin/marketplace.json`; keep all three in agreement. Don't add code from
+sources whose license is incompatible with Apache-2.0.
 
 ## Roadmap
 
-See `PLAN.md` for the remaining work (governance files, CI, marketplace prep, release).
+Tracked in GitHub Issues — file via the templates in `.github/ISSUE_TEMPLATE/`.

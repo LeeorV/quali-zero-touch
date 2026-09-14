@@ -36,7 +36,7 @@ These ship as skills under `skills/<skill>/` and can be invoked directly with `/
 | `/catalog [filter]` | List published blueprints (catalog items) available to launch in the current space. |
 | `/zero-touch-quickstart` | First-time user walkthrough — auth check, space selection, first launch or first blueprint. |
 | `/blueprint-from-asset [path]` | Scaffold a Torque blueprint from an existing IaC asset (Terraform, OpenTofu, Helm, Ansible, K8s, CloudFormation, Terragrunt). Auto-detects type. |
-| `/terragrunt-migrate` | Migrate a Terragrunt project to Torque blueprints — dependency blocks → `depends-on`, remote_state → backend, generate blocks → provider-overrides. |
+| `/terragrunt-migrate [path]` | Migrate a Terragrunt project to Torque blueprints — dependency blocks → `depends-on`, remote_state → backend, generate blocks → provider-overrides. |
 
 ### Torque API integration
 

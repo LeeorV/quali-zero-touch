@@ -4,7 +4,9 @@ Claude-specific guidance for working on this repo. See `AGENTS.md` for full deve
 
 ## SKILL.md frontmatter gotchas
 
-Claude Cowork's plugin validator is strict. The local `claude plugin validate` does **not** catch these — they fail silently on Cowork upload with a generic "validation error":
+Claude Cowork's plugin validator is strict. The local `claude plugin validate` does **not** catch these — they fail silently on Cowork upload with a generic "validation error".
+
+**Run `python3 scripts/validate_plugin.py` before pushing** — it catches every item below, and CI runs it on each push and PR. The manual recount one-liners are kept here for when you want to check a single skill while editing:
 
 - **`description` is hard-capped at 1024 characters** (after YAML folding `>` / quoting). Going over by even 1 char rejects the whole plugin. When editing rename refs inside a description, recount with:
   ```bash

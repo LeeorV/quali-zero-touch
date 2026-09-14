@@ -9,7 +9,7 @@
     {
       "name": "zero-touch",
       "source": "./",
-      "license": "MIT",
+      "license": "Apache-2.0",
       "description": "Torque DevOps toolkit — blueprint authoring, environment management, governance policies, day-2 workflows, and Terraform/Ansible integrations. Calls the Torque REST API directly."
     }
   ]
