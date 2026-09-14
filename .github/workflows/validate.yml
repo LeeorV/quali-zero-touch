@@ -1,0 +1,30 @@
+name: Validate plugin
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PyYAML
+        run: pip install --quiet pyyaml
+
+      # Enforces the invariants in AGENTS.md that Cowork's uploader rejects
+      # silently and `claude plugin validate` does not catch.
+      - name: Validate skills and manifests
+        run: python3 scripts/validate_plugin.py
+
+      - name: Check pack.sh builds
+        run: |
+          ./pack.sh --output /tmp/plugin-test.zip
+          unzip -l /tmp/plugin-test.zip | head -20
