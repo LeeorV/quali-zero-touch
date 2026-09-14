@@ -97,8 +97,10 @@ Manual: build with `./pack.sh`, install via Claude Code CLI or upload to Claude 
 
 ## License
 
-License pending — see `README.md`. Don't add code from incompatibly-licensed sources until the license decision is made.
+Apache-2.0 — see `LICENSE`. Declared in both `.claude-plugin/plugin.json` and
+`.claude-plugin/marketplace.json`; keep all three in agreement. Don't add code from
+sources whose license is incompatible with Apache-2.0.
 
 ## Roadmap
 
-See `PLAN.md` for the remaining work (governance files, CI, marketplace prep, release).
+Tracked in GitHub Issues — file via the templates in `.github/ISSUE_TEMPLATE/`.
