@@ -20,6 +20,7 @@ Quali Zero Touch is a Claude Code/Cowork plugin for [Quali Torque](https://www.q
 | **aws-best-practices** | AWS architecture, IAM, cost optimization, security hardening — Well-Architected guidance tailored to Torque workloads. |
 | **azure-best-practices** | Azure architecture, RBAC, cost optimization, security hardening — Well-Architected guidance for Azure-targeting Torque grains (Terraform, ARM, Ansible). |
 | **k8s-operations** | Kubernetes troubleshooting, manifest authoring, cluster management — useful when investigating Torque Helm/K8s grains. |
+| **import-env** | Import existing (brownfield) infrastructure into Torque. Surfaces the goal of the import first — manage one live environment in place vs. build a digital twin that can deploy copies — then applies the rules and traps for that track. |
 | **repo-conventions** | Canonical Torque repo layout — where blueprints, Terraform/Helm/Ansible assets, workflows, and Rego policies live. Auto-triggers before scaffolding a greenfield project. |
 
 ### Commands (user-invocable skills)
@@ -37,6 +38,7 @@ These ship as skills under `skills/<skill>/` and can be invoked directly with `/
 | `/zero-touch-quickstart` | First-time user walkthrough — auth check, space selection, first launch or first blueprint. |
 | `/blueprint-from-asset [path]` | Scaffold a Torque blueprint from an existing IaC asset (Terraform, OpenTofu, Helm, Ansible, K8s, CloudFormation, Terragrunt). Auto-detects type. |
 | `/terragrunt-migrate [path]` | Migrate a Terragrunt project to Torque blueprints — dependency blocks → `depends-on`, remote_state → backend, generate blocks → provider-overrides. |
+| `/import-env [resource-or-env]` | Walk through a brownfield import — asks what the import is for (cost/day-2/drift vs. digital twin), then scaffolds to that track's rules. |
 
 ### Torque API integration
 

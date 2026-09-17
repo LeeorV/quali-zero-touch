@@ -36,6 +36,14 @@ If multiple types are detected, ask the user which one to wrap (or whether to co
 
 If type can't be determined, ask the user.
 
+**Before going further, check whether the asset is import-generated.** Configuration produced
+by `terraform plan -generate-config-out`, `terraformer`, or a Torque brownfield import
+describes infrastructure that *already exists* — every value is a literal, resource names
+match live resources, and there is usually no `variables.tf`. Wrapping it like a greenfield
+module produces a blueprint nobody can safely launch twice. If the asset looks like that, or
+the user mentions existing/running infrastructure, **invoke the `import-env` skill first** —
+it establishes what the import is for before any YAML gets written.
+
 ## Step 2 — Inspect the asset
 
 Read the source files to extract:

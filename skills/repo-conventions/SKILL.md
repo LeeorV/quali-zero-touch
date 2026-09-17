@@ -81,6 +81,7 @@ This skill answers: **where in the repo does each artifact live, and how should 
 3. **One folder per module** for kinds that need multiple files (`terraform/<module>/`, `helm/<chart>/`, `ansible/<playbook>/`).
 4. **One file per artifact** for single-file kinds (`scripts/`, `workflows/`, `policies/`, `cloudformation/`).
 5. **Module folder name = `path:` value** in the blueprint `source:` block (e.g. `path: terraform/rds` ↔ folder `terraform/rds/`).
+6. **Modules from a brownfield import get an `imported-` prefix** (e.g. `terraform/imported-gke-cluster/`). They represent one live environment and are not reusable — the folder name should say so without opening the files. See the `import-env` skill.
 
 ---
 
