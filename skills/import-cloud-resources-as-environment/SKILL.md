@@ -1,19 +1,19 @@
 ---
 name: import-cloud-resources-as-environment
 description: >
-  Use this skill to import existing, already-running cloud resources (AWS, Azure, GCP, or other providers) into Torque
-  as a managed environment — an alternative to Torque's built-in curate/codify auto-generation,
-  which has known reliability issues on non-Torque-curated assets. 
-  Drives the pipeline: look up live resource details via the appropriate cloud CLI, 
-  generate a non-templated Terraform config matching the resource exactly, 
-  run a real `terraform import` against a cloud-native backend, 
-  commit to a Torque-connected repo, sync it, optionally author a minimal blueprint, 
-  and call Torque's import API. 
+  Use this skill to import existing, running cloud resources (AWS, Azure, GCP, or other providers)
+  into Torque as a managed environment — an alternative to Torque's built-in curate/codify tool,
+  unreliable on non-Torque-curated assets.
+  Drives the pipeline: look up live resource details via cloud CLI,
+  generate a non-templated Terraform config matching it exactly,
+  run a real `terraform import` against a cloud-native backend,
+  commit to a Torque-connected repo, sync it, optionally author a minimal blueprint,
+  and call Torque's import API.
   Triggers: "import this VM into Torque", "bring my existing cloud resources into Torque",
   "codify this resource", "create a Torque environment from an existing resource", "import
-  <resource id> as a Torque environment", "curate this resource manually", "replace Torque's codify tool". 
+  <resource id> as a Torque environment", "curate this resource manually", "replace Torque's codify tool".
   Never improvise a Terraform import config or Torque import call from memory — verify
-  against the live provider schema, live plan output, or live Torque API/swagger.
+  against the live provider schema, plan output, or Torque API/swagger.
 ---
 
 # Import Cloud Resources as a Torque Environment — SKILL.md
@@ -43,17 +43,23 @@ affect Torque's import endpoints, plus one documented vCenter/vSphere limitation
 opt-out (`tags.auto-tag: false` on the grain) — know all three before you start debugging your own
 request as if it were a new problem.
 
+**Read `references/track-a-vs-track-b.md` before Step 0.** An import produces a blueprint and a
+Terraform asset that look exactly like every other blueprint and asset in the repo. They are not
+the same thing as a normal reusable grain — whether they may ever be relaunched as a second
+environment is decided by the user's goal, not by the files, and has to be settled before you
+scaffold anything (Step 0, item 7).
+
 **Before running any Torque API call, read `${CLAUDE_PLUGIN_ROOT}/skills/zero-touch-api/SKILL.md`**
 and route every HTTP call through its `torque_api.py` helper — do not hand-roll `curl`.
 
 ---
 
-## Step 0 — Required Inputs (Gate — Do Not Proceed Until All Six Are Confirmed)
+## Step 0 — Required Inputs (Gate — Do Not Proceed Until All Seven Are Confirmed)
 
 This skill has already failed partway through a run by silently filling in gaps instead of asking
 — an unnamed agent, a backend written into a place it shouldn't have been. **Both were preventable
 by treating the inputs below as a hard gate, not something to discover step-by-step while working.**
-Check all six before generating anything. If any are missing, **ask for all of the missing ones
+Check all seven before generating anything. If any are missing, **ask for all of the missing ones
 together, in one message** — don't proceed partially and don't trickle questions one at a time.
 
 1. **Cloud/hypervisor credentials.** Either the user supplies credentials for this session (access
@@ -88,6 +94,13 @@ together, in one message** — don't proceed partially and don't trickle questio
    `GET /spaces/<space>/agents`, never reuse whichever agent a previous run happened to use as a
    default. Confirm the named agent is eligible (`active` status, matching cloud/subscription) once
    it's named — but the naming itself must come from the user.
+7. **The goal this import is for — Track A (manage the live environment) or Track B (also use it
+   as a template for new environments).** Read `references/track-a-vs-track-b.md` and ask the goal
+   question there before generating anything. Track A is the default (~99 of 100 imports); if the
+   user is unsure, choose it, say so, and state the consequence (the blueprint represents this one
+   live environment and is not intended to deploy a second one). Track B changes what gets
+   imported (Step 3's grouping) and how it's templated (Step 4) — it must be chosen **before**
+   import, never retrofitted silently after the fact.
 
 ---
 
@@ -167,8 +180,13 @@ name matching Torque's grain-name constraint: `[a-zA-Z0-9-_ ]{3,45}`.
 
 ## Step 4 — Decide the Templating Level
 
-Ask the user which resource attributes (if any) should become launch-time blueprint inputs, and for
-which resources — only relevant if a blueprint will be generated (Step 10).
+This step means two different things depending on the Track chosen in Step 0, item 7 — check
+which one applies before asking anything here.
+
+**Track A (the default — manage the live resource):** ask the user which resource attributes
+(if any) should become launch-time blueprint inputs, and for which resources — only relevant
+if a blueprint will be generated (Step 10). These inputs exist to let the user *update the
+live resource*, not to configure a new one; say so if it isn't already obvious from context.
 
 **Default recommendation: fully non-templated (literal, hardcoded values) for the first cut.** This
 mirrors what Torque's own internal curate output actually looks like (flat resource blocks with real
@@ -178,7 +196,16 @@ the initial import adds a second axis of things that can silently produce drift.
 
 If the user does want inputs from the start, keep them to attributes safe to vary without changing
 resource identity (instance size, tags, replica counts) — never template anything that's part of
-the resource's import ID or an immutable/`ForceNew` field for the first pass.
+the resource's import ID or an immutable/`ForceNew` field for the first pass. If a field is pinned
+by `lifecycle.ignore_changes` or only read by the provider at creation time, any input wired to it
+is inert against the already-imported resource — either don't expose it, or say plainly in its
+`description` that it has no effect here.
+
+**Track B (digital twin / template):** this step is where Track B's parameterization bar
+(see `references/track-a-vs-track-b.md`) actually gets met. Every name, range, and per-instance
+value that must not collide across copies needs to become an input — hand the module to
+`reusable-terraform` for its full Rules 1–5 parameterization pass rather than doing a partial job
+here, since a half-parameterized Track B module is worse than a clearly-labeled Track A one.
 
 ---
 
@@ -259,6 +286,34 @@ Confirmed real-world traps worth knowing before you start (don't rediscover thes
   existing VM (a SATA controller for a CD-ROM device, VMware Tools settings, etc.) — check the
   actual `plan` diff rather than assuming defaults are fine just because the schema doesn't mark
   them required.
+
+Four more general shapes, not tied to one provider, that recur across every import regardless of
+cloud — check for these even when the provider-specific list above doesn't apply:
+
+- **Not every same-named field means the same thing — can destroy the resource.** A cluster
+  resource and a node-pool resource can both expose a field called e.g. `initial_node_count`. On
+  the node pool it's an ordinary creation-time count; on the cluster it can be a legacy bootstrap
+  field for an implicit default pool that **forces replacement**. Before parameterizing any field
+  in Step 4 (even a "safe to vary" one), check whether it forces replacement on *this specific
+  resource type* — read the provider docs for that resource, not just the field name.
+- **Let outside owners own their fields — otherwise, perpetual diff.** When something outside
+  Terraform legitimately changes a value (a managed auto-upgrade moving a version forward, a
+  scaling workflow changing a node count), Terraform proposes reverting it on every `plan`,
+  forever. Name those fields in `lifecycle.ignore_changes` — the same pattern as the `user_data`
+  case above, generalized to any externally-owned field, not just secret-bearing ones.
+- **Import-generated configuration has no relationships — silent drift.** Import output writes
+  literal values everywhere: a cluster references its network as a hardcoded string rather than
+  pointing at the network resource beside it, so Terraform knows of no dependency. For
+  infrastructure the module should not own (Step 3's "referenced by literal ID" case), consider a
+  **data source** instead of a bare literal where practical — the relationship becomes real, and a
+  rename surfaces at plan time instead of silently pointing at something that no longer resolves.
+- **Moving the backend to the blueprint changes local Terraform runs.** Once the backend lives in
+  the blueprint/API call (per this step's file-layout rule) instead of the module, the module
+  declares no backend at all. A bare `terraform init` run locally in that directory offers to
+  migrate state *out* of remote storage onto local disk — **decline it.** Pass the backend
+  explicitly with `-backend-config` flags for local/scratch runs (Step 7), and expect credentials
+  to differ too: a module authenticating through an agent's ambient/workload identity cannot
+  resolve that identity from a laptop.
 
 ### Terraform engine version alignment
 
@@ -415,6 +470,14 @@ it for consistency even if it differs from Torque's general `repo-conventions` s
 brand-new modules, since this is accessory/generated-style content, not a hand-authored reusable
 module.
 
+**Track A only — carry the "not reusable" signal into the name, not just prose.** `imported-gke-cluster`
+tells anyone browsing the repo or catalog what they're looking at; a generic module/folder name
+invites exactly the second-launch mistake `references/track-a-vs-track-b.md` walks through. If the
+target repo has no existing convention to defer to above, default to an `imported-<resource>` name
+(module folder and, in Step 10, blueprint name) — or a dedicated `imported/` tree if the team
+prefers hard separation. Track B assets should NOT carry this signal — they are meant to look like
+an ordinary reusable module.
+
 **Never write to, or mimic the folder/branch structure of, anything identified as belonging to
 Torque's own internally-managed "fully managed curate" flow** (e.g. a dedicated bot-maintained
 branch, or a folder containing per-resource generated-ID subfolders with a `.torque-generated`
@@ -462,11 +525,16 @@ Skip this step entirely if the user chose "no blueprint" in Step 4 and Known Iss
 `references/known-issues.md`) doesn't affect the target account — go straight to
 `POST .../environments/import` instead.
 
-Otherwise, invoke the `author-blueprint` skill. Minimal shape for a single already-imported grain:
+Otherwise, invoke the `author-blueprint` skill — tell it up front that this is a Track A/B import
+blueprint (see `references/track-a-vs-track-b.md`) so it applies the right assumptions instead of
+its normal reusable-blueprint defaults. Minimal shape for a single already-imported grain:
 
 ```yaml
 spec_version: 2
-description: <what this wraps, and that it expects backend to be supplied at import time>
+description: >
+  <what this wraps>. Represents one specific live resource, imported via
+  import-cloud-resources-as-environment; not intended to launch a second copy (Track A).
+  Expects backend to be supplied at import time.
 inputs:
   agent:
     type: agent
@@ -609,14 +677,33 @@ convention the target repo already had that this run followed instead of the gen
 
 ---
 
+## Never Do
+
+- **Never** scaffold anything before Step 0's seven items are confirmed, including the Track A/B
+  goal question (item 7) — see `references/track-a-vs-track-b.md`.
+- **Never** present a Track A import blueprint as reusable, or suggest launching a second
+  environment from one unless the original environment was released — that's the specific confusion the Track A/B split exists to prevent.
+- **Never** parameterize a field (Step 4) without checking whether it forces replacement on that
+  specific resource type (Step 5).
+- **Never** silently retrofit a completed Track A import into a Track B template — say what it
+  costs (both bars in `references/track-a-vs-track-b.md`) and let the user choose.
+- **Never** leave a `backend` block in the committed Terraform source — it belongs in the API call
+  or the blueprint's `backend:` spec (Step 5, Step 8 gate).
+- **Never** expose a blueprint input that can't affect the live resource (an `ignore_changes`-pinned
+  or creation-only field) without saying so plainly in its `description` (Step 4).
+
+---
+
 ## Reference Links
 
 - Blueprint YAML structure: https://docs.qtorque.io/blueprint-designer-guide/blueprints/blueprints-yaml-structure
 - Terraform grain spec: https://docs.qtorque.io/blueprint-designer-guide/blueprints/terraform-grain
 - Repo conventions: use the `repo-conventions` skill
 - Blueprint authoring: use the `author-blueprint` skill
+- Reusable Terraform (Track B parameterization pass): use the `reusable-terraform` skill
 - Torque REST API conventions: use the `zero-touch-api` skill
 - `references/known-issues.md` (this skill) — live server-side import bugs, check before Step 11
+- `references/track-a-vs-track-b.md` (this skill) — goal-surfacing gate, check before Step 0
 
 ## Future Work
 
