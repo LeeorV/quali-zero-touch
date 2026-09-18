@@ -5,7 +5,7 @@ description: >
   into Torque as a managed environment — an alternative to Torque's built-in curate/codify tool,
   unreliable on non-Torque-curated assets.
   Drives the pipeline: look up live resource details via cloud CLI,
-  generate a non-templated Terraform config matching it exactly,
+  generate a non-templated Terraform config matching them exactly,
   run a real `terraform import` against a cloud-native backend,
   commit to a Torque-connected repo, sync it, optionally author a minimal blueprint,
   and call Torque's import API.
@@ -183,10 +183,10 @@ name matching Torque's grain-name constraint: `[a-zA-Z0-9-_ ]{3,45}`.
 This step means two different things depending on the Track chosen in Step 0, item 7 — check
 which one applies before asking anything here.
 
-**Track A (the default — manage the live resource):** ask the user which resource attributes
+**Track A (the default — manage the live resource(s)):** ask the user which resource attributes
 (if any) should become launch-time blueprint inputs, and for which resources — only relevant
 if a blueprint will be generated (Step 10). These inputs exist to let the user *update the
-live resource*, not to configure a new one; say so if it isn't already obvious from context.
+live resource(s)*, not to configure a new copy; say so if it isn't already obvious from context.
 
 **Default recommendation: fully non-templated (literal, hardcoded values) for the first cut.** This
 mirrors what Torque's own internal curate output actually looks like (flat resource blocks with real
@@ -198,8 +198,8 @@ If the user does want inputs from the start, keep them to attributes safe to var
 resource identity (instance size, tags, replica counts) — never template anything that's part of
 the resource's import ID or an immutable/`ForceNew` field for the first pass. If a field is pinned
 by `lifecycle.ignore_changes` or only read by the provider at creation time, any input wired to it
-is inert against the already-imported resource — either don't expose it, or say plainly in its
-`description` that it has no effect here.
+is inert against the already-imported resource it targets — either don't expose it, or say plainly
+in its `description` that it has no effect here.
 
 **Track B (digital twin / template):** this step is where Track B's parameterization bar
 (see `references/track-a-vs-track-b.md`) actually gets met. Every name, range, and per-instance
@@ -474,9 +474,11 @@ module.
 tells anyone browsing the repo or catalog what they're looking at; a generic module/folder name
 invites exactly the second-launch mistake `references/track-a-vs-track-b.md` walks through. If the
 target repo has no existing convention to defer to above, default to an `imported-<resource>` name
-(module folder and, in Step 10, blueprint name) — or a dedicated `imported/` tree if the team
-prefers hard separation. Track B assets should NOT carry this signal — they are meant to look like
-an ordinary reusable module.
+(module folder and, in Step 10, blueprint name) — or, when the grain groups several resources
+(Step 3), name it for the group/workload as a whole (`imported-app-stack`), not for just one
+resource inside it. A dedicated `imported/` tree is also fine if the team prefers hard separation.
+Track B assets should NOT carry this signal — they are meant to look like an ordinary reusable
+module.
 
 **Never write to, or mimic the folder/branch structure of, anything identified as belonging to
 Torque's own internally-managed "fully managed curate" flow** (e.g. a dedicated bot-maintained
@@ -532,7 +534,7 @@ its normal reusable-blueprint defaults. Minimal shape for a single already-impor
 ```yaml
 spec_version: 2
 description: >
-  <what this wraps>. Represents one specific live resource, imported via
+  <what this wraps>. Represents this specific live resource or set of resources, imported via
   import-cloud-resources-as-environment; not intended to launch a second copy (Track A).
   Expects backend to be supplied at import time.
 inputs:
@@ -587,7 +589,7 @@ auto-blueprint-generation service, which has known reliability issues on externa
 POST /spaces/<space>/environments/import_using_blueprint
 {
   "source": { "blueprint_name": "<name>", "repository_name": "<torque-repo-name>" },
-  "environment_name": "Imported Environment - <Resource Name> <Resource Type(s)>",
+  "environment_name": "Imported Environment - <Resource Name(s)> <Resource Type(s)>",
   "owner_email": "<owner>",
   "grains": [
     {
@@ -689,7 +691,7 @@ convention the target repo already had that this run followed instead of the gen
   costs (both bars in `references/track-a-vs-track-b.md`) and let the user choose.
 - **Never** leave a `backend` block in the committed Terraform source — it belongs in the API call
   or the blueprint's `backend:` spec (Step 5, Step 8 gate).
-- **Never** expose a blueprint input that can't affect the live resource (an `ignore_changes`-pinned
+- **Never** expose a blueprint input that can't affect the live resource(s) (an `ignore_changes`-pinned
   or creation-only field) without saying so plainly in its `description` (Step 4).
 
 ---

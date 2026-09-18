@@ -28,15 +28,15 @@ upload, a red deployment — you are in **debug mode**. Follow *Debug Mode* belo
 or judging anything. Steps 1–7 are an authoring pipeline; they are not a triage procedure, and
 improvising triage from them is how confident wrong answers get produced.
 
-If the blueprint **wraps an already-existing, already-running resource** rather than defining
-something new — check for this before applying Steps 1–7's normal assumptions. See
-*Brownfield/Import Mode* below.
+If the blueprint **wraps an already-existing, already-running resource (or set of resources)**
+rather than defining something new — check for this before applying Steps 1–7's normal
+assumptions. See *Brownfield/Import Mode* below.
 
 Otherwise, continue to Step 1.
 
 ---
 
-## Brownfield/Import Mode — This Blueprint Represents One Live Resource, Not a Template
+## Brownfield/Import Mode — This Blueprint Represents a Fixed Set of Live Resources, Not a Template
 
 ### Recognize it
 
@@ -51,11 +51,12 @@ Look for any of these signals before reviewing or writing:
 
 ### Apply different rules — do not "fix" it back toward a normal blueprint
 
-A blueprint produced by a brownfield import represents **one specific live environment**, not a
-reusable template. This is not a lesser or unfinished version of a normal blueprint — it is a
-different, equally valid category with the opposite defaults, chosen deliberately by whoever ran
-the import. Full reasoning, the two-model comparison, and why it's actually safe: see
-`import-cloud-resources-as-environment`'s `references/track-a-vs-track-b.md`.
+A blueprint produced by a brownfield import represents **a specific, fixed set of live
+resources** — one resource or many — not a reusable template. This is not a lesser or unfinished
+version of a normal blueprint — it is a different, equally valid category with the opposite
+defaults, chosen deliberately by whoever ran the import. Full reasoning, the two-model comparison,
+and why it's actually safe: see `import-cloud-resources-as-environment`'s
+`references/track-a-vs-track-b.md`.
 
 Concretely, when authoring or reviewing a brownfield/import blueprint:
 - **Do not** flag hardcoded/literal resource names, IDs, or a lack of `variables.tf`-style
@@ -72,10 +73,10 @@ Concretely, when authoring or reviewing a brownfield/import blueprint:
   `spec.backend` (or the import API's `grains[].backend`) exactly as Step 4's Terraform grain
   pattern already shows — this matters even more for imports, since the backend key is fixed to
   one already-existing state file.
-- **Do** check whether any input actually affects the live resource. An input wired to a field
-  pinned by `lifecycle.ignore_changes`, or one the provider only reads at creation time, is inert
-  against an already-imported resource — say so plainly in that input's `description` rather than
-  presenting it as a normal, effective input.
+- **Do** check whether any input actually affects the resource it targets. An input wired to a
+  field pinned by `lifecycle.ignore_changes`, or one the provider only reads at creation time, is
+  inert against an already-imported resource — say so plainly in that input's `description` rather
+  than presenting it as a normal, effective input.
 - **Do** name the blueprint for what it is (`Imported GKE Cluster`, not `GKE Cluster`) — a generic
   name invites exactly the second-launch attempt this mode exists to prevent.
 - If the user is doing a fresh import end-to-end (not just editing/reviewing existing import YAML),

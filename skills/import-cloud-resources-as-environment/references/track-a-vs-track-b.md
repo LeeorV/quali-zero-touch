@@ -11,8 +11,8 @@ Step 0 in `SKILL.md`).
 
 > What do you want this import to do for you?
 >
-> **(A) Manage this one running resource** — see what it costs, schedule it down when idle,
-> run day-2 workflows against it, change its configuration, detect drift.
+> **(A) Manage this resource (or set of resources)** — see what it costs, schedule it down when
+> idle, run day-2 workflows against it, change its configuration, detect drift.
 >
 > **(B) Use it as a source for new environments** — a digital twin of an existing set of resources, or turning
 > a long-running environment into something launchable on demand.
@@ -30,19 +30,21 @@ Route by the answer:
 
 **Track A is the overwhelming default — roughly 99 of 100 imports.** If the user is unsure,
 choose A, say you are choosing it, and state the consequence: *the resulting blueprint
-represents one specific live resource and is not intended to deploy a second one.*
+represents this specific set of live resource(s) — one resource or many — and is not intended
+to deploy a second copy of it.*
 
 If the answer is "both," that is Track B — and Track B has to be committed to **before** the
 import (Step 3 grouping and Step 4 templating both change), not retrofitted after.
 
 ---
 
-## Track A: the blueprint represents one live resource
+## Track A: the blueprint represents a fixed set of live resources
 
 ### The rule
 
-> A blueprint produced by a brownfield import represents one specific live resource. It is
-> not intended to deploy a second one.
+> A blueprint produced by a brownfield import represents a specific, fixed set of live
+> resources — whether that's a single VM or a whole application stack. It is not intended to
+> deploy a second copy of that set.
 
 Parameterizing it (Step 4) is still worth doing — but **not so the user can launch copies**.
 Inputs exist so the user can *change inputs to update the infrastructure that already
@@ -64,17 +66,17 @@ correctly leaves the rest alone (Step 3's grouping guidance).
 A blueprint that genuinely *creates* an environment has no such luxury: nothing exists yet,
 so every supporting piece has to be in the configuration.
 
-> **The real reason:** an import blueprint cannot clone its resource because the user never
+> **The real reason:** an import blueprint cannot clone its resources because the user never
 > codified the things a clone would need — and for what they were doing, they were right not to.
 
 ### Two models, easily mistaken for one
 
-| | Greenfield / Track B — blueprint as template | Brownfield (Track A) — blueprint as a live resource |
+| | Greenfield / Track B — blueprint as template | Brownfield (Track A) — blueprint as a fixed resource set |
 |---|---|---|
-| **Purpose** | Deploy many independent environments from one definition | Bring one existing, running resource under management |
+| **Purpose** | Deploy many independent environments from one definition | Bring an existing, running resource (or set of resources) under management |
 | **Relaunching** | Expected; that is the point | Not supported — fails on conflicts, harmlessly |
 | **Inputs exist to** | Configure each new copy independently | Update infrastructure that already exists |
-| **State** | Fresh, isolated state file per environment | Bound to the one state file describing the live resource |
+| **State** | Fresh, isolated state file per environment | Bound to the one state file (per grain) describing the live resources |
 | **Resource naming** | Parameterized or suffixed to avoid collisions | Fixed — the names already exist in the cloud |
 | **Scope** | Everything the workload needs: networking, security, IAM | Just the resources worth visibility and control; supporting infra correctly left out |
 
@@ -86,9 +88,14 @@ falls out of how Terraform and the cloud provider already behave.
 
 1. Someone launches a second environment from the import blueprint.
 2. Torque computes a **fresh state key** for that environment. It points at an empty state file.
-3. Terraform reads that empty state, sees no resources recorded, and plans to **create** everything.
-4. It asks the provider to create a resource using the name already baked into the configuration.
-5. Depending on the resource type - the provider may reject it: **that name is already taken.** The launch fails. The live resource is never touched. If the provider did not reject due to unique attribute value conflict, a new resource creation would likely fail on missing dependent scaffolding. 
+3. Terraform reads that empty state, sees no resources recorded, and plans to **create** everything
+   the configuration declares — one resource or many.
+4. It asks the provider to create each resource using the name already baked into its configuration.
+5. Depending on the resource type, the provider may reject the create: **that name is already
+   taken.** The launch fails. The live resources are never touched. For any resource whose name
+   isn't uniqueness-constrained, creation would likely still fail on a different missing
+   dependency — a security group, subnet, or IAM role the import correctly never codified (see
+   "Why it cannot double as a template" above).
 
 > **Why this is safe, not lucky:** Terraform only destroys what is recorded in its state. 
 > An empty state has nothing to destroy, so it can never produce a destroy plan for resources it
@@ -104,6 +111,10 @@ fails at the create step, well before anything is at risk.
 looking at. A generic name invites exactly the second launch the asset cannot support. Carry
 the same signal into the folder name (`terraform/imported-gke-cluster/`) alongside the
 canonical layout from `repo-conventions` — see Step 8 for the exact convention-check gate.
+
+When the import covers several resources grouped into one grain (Step 3), name for the group or
+workload as a whole (`imported-app-stack`), not for just one resource inside it — the same
+"not reusable" signal has to cover everything the grain actually wraps.
 
 ---
 

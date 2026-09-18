@@ -42,8 +42,9 @@ Terraform is flat literal resource blocks with no `variables.tf` at all, the fol
 almost certainly output from the `import-cloud-resources-as-environment` skill (or an equivalent
 manual import), not an unfinished reusable module. Route to that skill instead of continuing this
 one: wrapping it here and sending it through `reusable-terraform`'s normal parameterization pass
-(Step 3 below) would strip the literal values that pin it to one already-existing resource. See
-`import-cloud-resources-as-environment`'s `references/track-a-vs-track-b.md` for why that matters.
+(Step 3 below) would strip the literal values that pin it to the already-existing resource(s) it
+wraps. See `import-cloud-resources-as-environment`'s `references/track-a-vs-track-b.md` for why
+that matters.
 
 ## Step 2 — Inspect the asset
 
